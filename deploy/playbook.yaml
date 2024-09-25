@@ -1,0 +1,80 @@
+- name: Build go binary
+  connection: local
+  hosts: localhost
+  gather_facts: no
+  pre_tasks:
+    - include_vars: default_vars.yaml
+  tasks:
+    - name: Build Go Services
+      block:
+        - name: do build
+          shell:
+            cmd: |
+              cd {{ service_path }}
+              rm ./{{ service_name }}
+              templ generate
+              GOOS=linux GOARCH=amd64 go build -o {{ service_name }}
+          changed_when: false
+
+- name: Update web servers
+  hosts: webservers
+  remote_user: ubuntu
+  gather_facts: no
+  pre_tasks:
+    - include_vars: default_vars.yaml
+  tasks:
+  - name: Install go
+    become: true
+    apt:
+      name: golang-go
+      state: present
+
+  - name: Ensure static file directory exists
+    become: true
+    ansible.builtin.file:
+      dest: "/var/www/{{ service_host }}/static"
+      state: directory
+      owner: ubuntu
+      group: ubuntu
+      mode: 0755
+      recurse: true
+      force: true
+
+  - name: Ship file
+    become: true
+    ansible.builtin.copy:
+      src: "{{ service_path }}/{{ service_name }}"
+      dest: "/var/www/{{ service_host }}/{{ service_name }}"
+      owner: ubuntu
+      group: ubuntu
+      mode: 0755
+
+  - name: Configure {{ service_name }}
+    become: true
+    ansible.builtin.template:
+      src: templates/service.j2
+      dest: /etc/systemd/system/{{ service_name }}.service
+      owner: root
+      group: root
+    notify:
+      - Reload systemctl
+
+  - name: sync static
+    become: true
+    ansible.posix.synchronize:
+      src: "{{ service_path }}/static/"
+      dest: "/var/www/{{ service_host }}/static/"
+      recursive: true
+      archive: true
+      compress: true
+
+  - include_tasks: nginx.yaml
+
+  handlers:
+    - name: Reload systemctl
+      become: true
+      ansible.builtin.systemd:
+        state: restarted
+        service: "{{ service_name }}"
+        daemon_reload: true
+      changed_when: false
