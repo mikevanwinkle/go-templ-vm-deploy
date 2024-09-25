@@ -1,6 +1,6 @@
 service_name: hello
 service_port: 3000
-service_path: ~/Projects/go-templ-vm-deploy
-service_host: gotempl.pltxc.com
-letsencrypt_email: mike@mikevanwinkle.com
+service_path: /local/path/to/project
+service_host: yourdomain.com
+letsencrypt_email: you@you.dom
 default_region: us-west-1
